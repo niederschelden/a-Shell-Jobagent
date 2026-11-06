@@ -123,3 +123,65 @@ def lade_prompt(pfad: Path, vorlage: str, platzhalter_pflicht: bool) -> str:
             f"Teil ausfüllen und erneut aufrufen."
         )
     return text
+
+
+def lade_alle_prompts(arbeitsverzeichnis: Path) -> tuple[str, str, str]:
+    """Prüft alle drei Prompt-Dateien vorab, in einem Schritt.
+
+    Fehlende Dateien werden aus den Vorlagen angelegt (alle auf einmal, nicht
+    nur die erste); danach Abbruch, damit der Nutzer personalisieren kann,
+    bevor die teuren API-Abrufe und LLM-Stufen laufen. Leere Dateien oder
+    unveränderte Platzhalter werden ohne Überschreiben beanstandet. Im
+    Erfolgsfall werden die Inhalte (Stufe 1, Stufe 2, Bericht) geliefert.
+    """
+    definitionen: tuple[tuple[str, str, bool], ...] = (
+        (DATEINAME_STUFE1, VORLAGE_STUFE1, True),
+        (DATEINAME_STUFE2, VORLAGE_STUFE2, True),
+        (DATEINAME_BERICHT, VORLAGE_BERICHT, False),
+    )
+    angelegt: list[str] = []
+    probleme: list[str] = []
+    inhalte: list[str] = []
+    for name, vorlage, platzhalter_pflicht in definitionen:
+        pfad = arbeitsverzeichnis / name
+        if not pfad.exists():
+            try:
+                pfad.write_text(vorlage, encoding="utf-8")
+            except OSError as e:
+                probleme.append(f"{name} konnte nicht erstellt werden: {e}")
+                inhalte.append("")
+                continue
+            angelegt.append(name)
+            inhalte.append("")
+            continue
+        try:
+            text = pfad.read_text(encoding="utf-8")
+        except OSError as e:
+            probleme.append(f"{name} ist nicht lesbar: {e}")
+            inhalte.append("")
+            continue
+        if not text.strip():
+            probleme.append(f"{name} ist leer")
+            inhalte.append("")
+            continue
+        if platzhalter_pflicht and PLATZHALTER_MARKE in text:
+            probleme.append(
+                f"{name} enthält noch den unveränderten Platzhalter "
+                f'"{PLATZHALTER_MARKE} ..."'
+            )
+            inhalte.append("")
+            continue
+        inhalte.append(text)
+    if angelegt or probleme:
+        teile: list[str] = []
+        if angelegt:
+            teile.append(
+                "Prompt-Datei(en) fehlten, Vorlage(n) wurde(n) erstellt: "
+                + ", ".join(angelegt)
+                + ". Bitte den persönlichen Teil am Platzhalter ausfüllen "
+                "bzw. die Vorlage prüfen und erneut aufrufen."
+            )
+        if probleme:
+            teile.append("Probleme: " + "; ".join(probleme) + ".")
+        raise AgentFehler(" ".join(teile))
+    return inhalte[0], inhalte[1], inhalte[2]

@@ -17,15 +17,7 @@ from a_shell_agent.pipeline import (
     stufe2_bewerten,
     stufe3_bericht,
 )
-from a_shell_agent.prompts import (
-    DATEINAME_BERICHT,
-    DATEINAME_STUFE1,
-    DATEINAME_STUFE2,
-    VORLAGE_BERICHT,
-    VORLAGE_STUFE1,
-    VORLAGE_STUFE2,
-    lade_prompt,
-)
+from a_shell_agent.prompts import lade_alle_prompts
 from a_shell_agent.umgebung import hole_mistral_schluessel
 
 DATEI_STELLEN = "stellen.json"
@@ -61,8 +53,14 @@ def fuehre_aus(
     mistral: MistralKlient,
     arbeitsverzeichnis: Path,
 ) -> int:
-    """Führt die Schritte 2 bis 9 aus; Step 1 (Parameter) ist bereits geprüft."""
+    """Führt die Schritte 2 bis 9 aus; Step 1 (Parameter) ist bereits geprüft.
+
+    Zuerst werden alle drei Prompt-Dateien geprüft bzw. fehlende aus den
+    Vorlagen angelegt (ein Schritt, ein Abbruch) - das geschieht vor den
+    teuren Abrufen, damit ein Abbruch keine Rechenleistung verschwendet.
+    """
     debug_aktiviere(konfig)
+    prompt1, prompt2, prompt3 = lade_alle_prompts(arbeitsverzeichnis)
     angebote = arbeitsamt.hole_angebote(konfig.plz, konfig.zeitraum, konfig.entfernung)
     _schreibe_json(arbeitsverzeichnis / DATEI_STELLEN, angebote)
     if not angebote:
@@ -71,9 +69,6 @@ def fuehre_aus(
         return 0
 
     nutzbar = _ohne_refnr_ueberspringen(angebote)
-    prompt1 = lade_prompt(
-        arbeitsverzeichnis / DATEINAME_STUFE1, VORLAGE_STUFE1, platzhalter_pflicht=True
-    )
     kandidaten = stufe1_filtern(nutzbar, prompt1, mistral, konfig.modell_stufe1)
     if not kandidaten:
         print("Keine Daten vorhanden")
@@ -99,9 +94,6 @@ def fuehre_aus(
             "Kein einziger Detailabruf erfolgreich, details.json nicht geschrieben."
         )
 
-    prompt2 = lade_prompt(
-        arbeitsverzeichnis / DATEINAME_STUFE2, VORLAGE_STUFE2, platzhalter_pflicht=True
-    )
     bewertungen = stufe2_bewerten(details, prompt2, mistral, konfig.modell_stufe2)
     angenommen = [b for b in bewertungen if b.angenommen]
     if not angenommen:
@@ -125,11 +117,6 @@ def fuehre_aus(
             "(referenznummer fehlt)."
         )
 
-    prompt3 = lade_prompt(
-        arbeitsverzeichnis / DATEINAME_BERICHT,
-        VORLAGE_BERICHT,
-        platzhalter_pflicht=False,
-    )
     bericht = stufe3_bericht(
         details_angenommen, prompt3, mistral, konfig.modell_bericht, konfig
     )

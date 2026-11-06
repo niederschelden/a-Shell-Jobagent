@@ -7,6 +7,9 @@ erstellen, welche Stellen bewerbenswert sind.
 Leitprinzip: Keep It Simple – wenige Dateien, keine Laufzeit-Abhängigkeiten,
 nur Python-Standardbibliothek.
 
+> Hinweis: Der gesamte Inhalt dieses Repositories wurde am iPhone/iPad mit
+> [Vibe](https://vibe.mistral.ai/) von Mistral AI geschrieben.
+
 ## Installation
 
 ### a-Shell auf iPad/iPhone
@@ -15,7 +18,7 @@ Das Wheel `a_shell_jobagent-…-py3-none-any.whl` (Ordner `dist/`) z. B. per
 AirDrop oder aus iCloud in a-Shell holen und installieren:
 
 ```
-pip install a_shell_jobagent-0.1.1-py3-none-any.whl
+pip install a_shell_jobagent-0.1.2-py3-none-any.whl
 ```
 
 ### Desktop
@@ -59,16 +62,22 @@ python -m a_shell_agent 57080 7 25
 ## Ablauf
 
 1. Parameter prüfen (ungültige Werte: Abbruch mit Fehlermeldung).
-2. Alle Angebote des Zeitraums von der Arbeitsagentur-API holen (Pagination,
+2. Alle drei Prompt-Dateien vorab prüfen: Fehlende werden aus den Vorlagen
+   angelegt (alle in einem Schritt), danach Abbruch mit der Bitte, die
+   persönlichen Platzhalter auszufüllen bzw. die Vorlagen zu prüfen. Leere
+   Dateien oder unveränderte Platzhalter werden ohne Überschreiben
+   beanstandet. Die Prüfung läuft bewusst vor allen Abrufen, damit ein
+   Abbruch keine Rechenleistung verschwendet.
+3. Alle Angebote des Zeitraums von der Arbeitsagentur-API holen (Pagination,
    ca. 6 s Pause zwischen Seiten, Backoff bei 429/5xx).
-3. `stellen.json` mit allen Überschriften unverändert ins Arbeitsverzeichnis
+4. `stellen.json` mit allen Überschriften unverändert ins Arbeitsverzeichnis
    schreiben. Keine Angebote: Meldung `Keine Daten vorhanden`, Ende (Exit 0).
-4. LLM-Stufe 1 (Aussortieren): Prompt-Datei `stufe1_prompts.txt`, die
+5. LLM-Stufe 1 (Aussortieren): Prompt-Datei `stufe1_prompts.txt`, die
    Datensätze roh in Batches (max. ~150 KB je Anfrage) an das Modell, zurück
    kommen die Referenznummern der zu behaltenden Angebote. Nichts übrig:
    `Keine Daten vorhanden`, Ende (Exit 0).
-5. Details der Kandidaten holen und als `details.json` schreiben.
-6. LLM-Stufe 2 (Positivauswahl): Prompt-Datei `stufe2_prompts.txt`, die
+6. Details der Kandidaten holen und als `details.json` schreiben.
+7. LLM-Stufe 2 (Positivauswahl): Prompt-Datei `stufe2_prompts.txt`, die
    Detail-Datensätze vollständig und roh in wenigen Batches (max. ~150 KB
    je Anfrage, damit der Kontext von Mistral Medium sicher reicht) an das
    Modell; Antwort je Job: Referenznummer, Entscheidung
@@ -77,13 +86,13 @@ python -m a_shell_agent 57080 7 25
    `[Stufe 2]`-Zeile mit Referenznummer, Titel (falls im Datensatz
    vorhanden) und Begründung. Kein Job angenommen: Meldung
    `Keine Jobs gefunden`, Ende (Exit 0).
-7. LLM-Stufe 3 (Bericht): Prompt-Datei `bericht_prompts.txt`, Detail-Datensätze
+8. LLM-Stufe 3 (Bericht): Prompt-Datei `bericht_prompts.txt`, Detail-Datensätze
    der angenommenen Jobs plus Suchparameter an das Modell; die Antwort wird
    unverändert als `Bericht-<PLZ>-<ZEITRAUM>-<ENTFERNUNG>.txt` gespeichert
    (z. B. `Bericht-57080-7-25.txt`).
-8. Aufräumen: ohne `--debug` werden `stellen.json` und `details.json`
+9. Aufräumen: ohne `--debug` werden `stellen.json` und `details.json`
    gelöscht; mit `--debug` bleiben sie liegen. Löschfehler brechen nicht ab.
-9. Erfolgsmeldung, Exit-Code 0.
+10. Erfolgsmeldung, Exit-Code 0.
 
 Alle drei LLM-Stufen erhalten die Daten roh und vollständig; der Code trifft
 keine Feldauswahl und nimmt nur an, dass jeder Datensatz eine

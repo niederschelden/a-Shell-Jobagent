@@ -1,6 +1,6 @@
 [project]
 name = "a-shell-jobagent"
-version = "0.1.1"
+version = "0.1.2"
 description = "Jobsuch-Agent: Angebote der Bundesagentur für Arbeit abrufen, per Mistral filtern, Bericht erstellen"
 requires-python = ">=3.11"
 dependencies = []

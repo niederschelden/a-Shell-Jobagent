@@ -31,6 +31,7 @@ from a_shell_agent.prompts import (
     DATEINAME_STUFE1,
     DATEINAME_STUFE2,
     PLATZHALTER_MARKE,
+    lade_alle_prompts,
     lade_prompt,
 )
 from a_shell_agent.umgebung import lade_env
@@ -422,6 +423,7 @@ def test_ablauf_debug_laesst_dateien_liegen(tmp_path: Path) -> None:
 
 def test_ablauf_keine_daten(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     mistral = FakeMistral([])
+    schreibe_prompts(tmp_path)
     code = fuehre_aus(konfig(), FakeArbeitsamt([[]], {}), mistral, tmp_path)
     assert code == 0
     assert "Keine Daten vorhanden" in capsys.readouterr().out
@@ -679,6 +681,68 @@ def test_debug_bezeichnungen_der_stufen(
     modelle = [a["modell"] for a in mistral.aufrufe]
     assert bezeichnungen == ["Stufe 1 JSON", "Stufe 2 JSON", "Stufe 3 Berichtsdaten"]
     assert modelle == ["m1", "m2", "m3"]
+
+
+# ------------------------------------------------- Vorab-Prüfung Prompts
+
+
+def test_vorpruefung_legt_alle_drei_an(tmp_path: Path) -> None:
+    with pytest.raises(
+        AgentFehler,
+        match=r"erstellt: .*stufe1_prompts\.txt, stufe2_prompts\.txt, bericht_prompts\.txt",
+    ):
+        lade_alle_prompts(tmp_path)
+    from a_shell_agent import prompts
+
+    for name, vorlage in (
+        (prompts.DATEINAME_STUFE1, prompts.VORLAGE_STUFE1),
+        (prompts.DATEINAME_STUFE2, prompts.VORLAGE_STUFE2),
+        (prompts.DATEINAME_BERICHT, prompts.VORLAGE_BERICHT),
+    ):
+        assert (tmp_path / name).read_text(encoding="utf-8") == vorlage
+
+
+def test_vorpruefung_legt_fehlende_alle_ohne_ueberschreiben(
+    tmp_path: Path,
+) -> None:
+    schreibe_prompts(tmp_path)
+    (tmp_path / DATEINAME_STUFE1).unlink()
+    (tmp_path / DATEINAME_BERICHT).unlink()
+    with pytest.raises(
+        AgentFehler, match=r"erstellt: .*stufe1_prompts\.txt, bericht_prompts\.txt"
+    ):
+        lade_alle_prompts(tmp_path)
+    # Stufe 2 bleibt unberührt
+    assert (tmp_path / DATEINAME_STUFE2).read_text(
+        encoding="utf-8"
+    ) == "Persönliche Kriterien: IT-Jobs.\n"
+
+
+def test_vorpruefung_sammelt_probleme(tmp_path: Path) -> None:
+    schreibe_prompts(tmp_path)
+    (tmp_path / DATEINAME_STUFE2).write_text("", encoding="utf-8")
+    (tmp_path / DATEINAME_BERICHT).write_text("  ", encoding="utf-8")
+    with pytest.raises(AgentFehler, match=r"leer.*leer"):
+        lade_alle_prompts(tmp_path)
+    assert (tmp_path / DATEINAME_STUFE2).read_text(encoding="utf-8") == ""
+
+
+def test_vorpruefung_ok_liefert_inhalte(tmp_path: Path) -> None:
+    schreibe_prompts(tmp_path)
+    p1, _p2, p3 = lade_alle_prompts(tmp_path)
+    assert p1 == "Persönliche Kriterien: IT-Jobs.\n"
+    assert p3 == "Erstelle den Bericht.\n"
+
+
+def test_vorpruefung_vor_api_abruf(tmp_path: Path) -> None:
+    """Fehlende Prompts brechen den Lauf ab, bevor irgendein API-Abruf
+    oder LLM-Aufruf stattfindet (spart Rechenleistung)."""
+    mistral = FakeMistral([])
+    arbeitsamt = FakeArbeitsamt([[ANGEBOT]], {"R1": DETAIL})
+    with pytest.raises(AgentFehler, match="erstellt"):
+        fuehre_aus(konfig(), arbeitsamt, mistral, tmp_path)
+    assert mistral.aufrufe == []
+    assert arbeitsamt.seiten == [[ANGEBOT]]  # nie angefasst
 
 
 # ---------------------------------------------------------- Prompt-Dateien
