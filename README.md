@@ -10,6 +10,19 @@ nur Python-Standardbibliothek.
 > Hinweis: Der gesamte Inhalt dieses Repositories wurde am iPhone/iPad mit
 > [Vibe](https://vibe.mistral.ai/) von Mistral AI geschrieben.
 
+## Voraussetzung: Mistral-API-Schlüssel
+
+Dieses Programm filtert und bewertet Stellenangebote mit einem
+Large-Language-Modell von Mistral. Dafür brauchst du **vorab** einen
+Mistral-API-Schlüssel: kostenloses Konto unter
+[console.mistral.ai](https://console.mistral.ai) anlegen, dort unter
+„API Keys" einen Schlüssel erzeugen und ihn entweder als Umgebungsvariable
+`MISTRAL_API_KEY` setzen oder in eine Datei `.env` im Arbeitsverzeichnis
+mit der Zeile `MISTRAL_API_KEY=<schluessel>` eintragen (Details siehe
+unten). Ohne Schlüssel bricht das Programm mit einer entsprechenden
+Fehlermeldung ab. Die Nutzung der Mistral-API fällt unter die Preise von
+Mistral; die Arbeitsamt-API ist frei.
+
 ## Installation
 
 ### a-Shell auf iPad/iPhone
