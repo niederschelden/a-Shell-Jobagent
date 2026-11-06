@@ -144,11 +144,17 @@ def test_pagination_endet_bei_kurzer_seite() -> None:
     klient.PAUSE_SEKUNDEN = 0.0
     voll = [{"referenznummer": f"R{i}"} for i in range(100)]
     seiten: list[list[dict[str, Any]]] = [voll, voll, voll[:37]]
-    klient._get_json = lambda url: {  # type: ignore[method-assign]
-        "stellenangebote": seiten.pop(0)
-    }
+    urls: list[str] = []
+
+    def fake_get(url: str) -> dict[str, Any]:
+        urls.append(url)
+        return {"stellenangebote": seiten.pop(0)}
+
+    klient._get_json = fake_get  # type: ignore[method-assign]
     angebote = klient.hole_angebote("57080", 7, 25)
     assert len(angebote) == 237
+    assert urls[0].endswith("size=100&page=1")
+    assert urls[-1].endswith("page=3")
 
 
 def test_pagination_leere_letzte_seite() -> None:

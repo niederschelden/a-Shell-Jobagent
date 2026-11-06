@@ -33,7 +33,7 @@ class ArbeitsamtKlient:
     ) -> list[dict[str, Any]]:
         """Blättert durch alle Ergebnisseiten des Zeitraums (nur Überschriften)."""
         angebote: list[dict[str, Any]] = []
-        seite = 0
+        seite = 1  # API erwartet 1-basierte Seiten, page=0 liefert HTTP 400
         while True:
             query = urllib.parse.urlencode(
                 {
@@ -84,13 +84,22 @@ class ArbeitsamtKlient:
                 if e.code == 429 or 500 <= e.code < 600:
                     self._warte(versuch, f"HTTP {e.code}")
                     continue
-                raise AgentFehler(f"API lehnt ab: HTTP {e.code} ({url})") from e
+                detail = self._fehlerdetail(e)
+                raise AgentFehler(f"API lehnt ab: HTTP {e.code} ({url}){detail}") from e
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 fehler = e
                 self._warte(versuch, f"Netzwerkfehler: {e}")
         raise AgentFehler(
             f"{url} nach {self.MAX_VERSUCHE} Versuchen unerreichbar: {fehler}"
         )
+
+    def _fehlerdetail(self, e: urllib.error.HTTPError) -> str:
+        try:
+            meldung = e.read().decode("utf-8", errors="replace")
+        except OSError:
+            return ""
+        kompakt = " ".join(meldung.split())
+        return f": {kompakt[:200]}" if kompakt else ""
 
     def _warte(self, versuch: int, grund: str) -> None:
         sekunden = self.BACKOFF_SEKUNDEN**versuch
