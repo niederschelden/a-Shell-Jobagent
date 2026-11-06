@@ -1,0 +1,36 @@
+[project]
+name = "a-shell-jobagent"
+version = "0.1.2"
+description = "Jobsuch-Agent: Angebote der Bundesagentur für Arbeit abrufen, per Mistral filtern, Bericht erstellen"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.15",
+    "ruff>=0.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/a_shell_agent"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF", "BLE", "EXE"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+strict = true
+files = ["src/a_shell_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
