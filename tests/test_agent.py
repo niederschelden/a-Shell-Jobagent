@@ -264,6 +264,34 @@ def test_stufe2_umlaut_schluessel() -> None:
     assert bewertungen[0].beggruendung == "passt gut"
 
 
+def test_stufe2_typografische_anfuehrungszeichen() -> None:
+    """Antwort mit „ “ statt ASCII-Anführungszeichen wird trotzdem geparst."""
+    mistral = FakeMistral(
+        [
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "abgelehnt", "begruendung": "Fachfremd."}]}'
+        ]
+    )
+    bewertungen = stufe2_bewerten([DETAIL], "prompt", mistral, "modell")
+    assert bewertungen[0].angenommen is False
+    assert bewertungen[0].beggruendung == "Fachfremd."
+
+
+def test_stufe2_code_fence_around_json() -> None:
+    mistral = FakeMistral(
+        [
+            '```json\n{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "Passt."}]}\n```'
+        ]
+    )
+    bewertungen = stufe2_bewerten([DETAIL], "prompt", mistral, "modell")
+    assert bewertungen[0].angenommen is True
+
+
+def test_stufe1_typografische_anfuehrungszeichen() -> None:
+    mistral = FakeMistral(['{"referenznummern": ["R1"]}'])
+    ergebnis = stufe1_filtern([ANGEBOT, ANGEBOT2], "prompt", mistral, "modell")
+    assert ergebnis == [ANGEBOT]
+
+
 def test_stufe2_fehlende_bewertung_gilt_als_abgelehnt(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

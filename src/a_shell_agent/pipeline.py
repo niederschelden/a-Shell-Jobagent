@@ -182,7 +182,7 @@ def stufe3_bericht(
 
 def _json_objekt_aus(antwort: str, kontext: str) -> dict[str, Any]:
     try:
-        objekt = json.loads(antwort)
+        objekt = json.loads(_bereinige(antwort))
     except ValueError as e:
         raise AgentFehler(
             f"{kontext}: Antwort der LLM-Stufe ist kein gültiges JSON: {e}. "
@@ -191,6 +191,28 @@ def _json_objekt_aus(antwort: str, kontext: str) -> dict[str, Any]:
     if not isinstance(objekt, dict):
         raise AgentFehler(f"{kontext}: Antwort ist kein JSON-Objekt.")
     return objekt
+
+
+def _bereinige(antwort: str) -> str:
+    """Macht LLM-Antworten JSON-fähig: entfernt Code-Fences und ersetzt
+    typografische Anführungszeichen („ “ etc.) durch ASCII-Äquivalente."""
+    text = antwort.strip()
+    if text.startswith("```"):
+        text = (
+            text.removeprefix("```json")
+            .removeprefix("```JSON")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
+    return (
+        text.replace("\u201e", '"')
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201a", "'")
+    )
 
 
 def _referenznummern_aus(antwort: str) -> list[str]:
