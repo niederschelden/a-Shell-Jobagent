@@ -416,10 +416,14 @@ def test_vorlagen_enthalten_platzhaltermarke() -> None:
 def test_env_loader(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pfad = tmp_path / ".env"
     pfad.write_text(
-        "# Kommentar\nMISTRAL_API_KEY=aus-datei\nLEER=\nOHNE\n", encoding="utf-8"
+        '# Kommentar\nMISTRAL_API_KEY="aus-datei-mit-quotes"\nLEER=\nOHNE\n',
+        encoding="utf-8",
     )
     monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-    assert lade_env(pfad) == {"MISTRAL_API_KEY": "aus-datei", "LEER": ""}
+    assert lade_env(pfad) == {
+        "MISTRAL_API_KEY": "aus-datei-mit-quotes",
+        "LEER": "",
+    }
     monkeypatch.setenv("MISTRAL_API_KEY", "aus-umgebung")
     from a_shell_agent.umgebung import hole_mistral_schluessel
 

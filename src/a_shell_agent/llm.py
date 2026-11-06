@@ -65,7 +65,9 @@ class MistralKlient:
                 if e.code == 429 or 500 <= e.code < 600:
                     self._warte(versuch, f"HTTP {e.code}")
                     continue
-                raise AgentFehler(f"Mistral lehnt ab: HTTP {e.code}") from e
+                raise AgentFehler(
+                    f"Mistral lehnt ab: HTTP {e.code}{self._fehlerdetail(e)}"
+                ) from e
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 fehler = e
                 self._warte(versuch, f"Netzwerkfehler: {e}")
@@ -81,6 +83,14 @@ class MistralKlient:
         if not isinstance(inhalt, str):
             raise AgentFehler("Mistral-Antwort enthält keinen Text.")
         return inhalt
+
+    def _fehlerdetail(self, e: urllib.error.HTTPError) -> str:
+        try:
+            meldung = e.read().decode("utf-8", errors="replace")
+        except OSError:
+            return ""
+        kompakt = " ".join(meldung.split())
+        return f": {kompakt[:200]}" if kompakt else ""
 
     def _timeout_fuer(self, groesse: int) -> float:
         return (

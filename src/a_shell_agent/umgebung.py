@@ -25,16 +25,19 @@ def lade_env(pfad: Path) -> dict[str, str]:
         if not zeile or zeile.startswith("#") or "=" not in zeile:
             continue
         schluessel, _, wert = zeile.partition("=")
-        werte[schluessel.strip()] = wert.strip()
+        werte[schluessel.strip()] = wert.strip().strip("'\"")
     return werte
 
 
 def hole_mistral_schluessel(arbeitsverzeichnis: Path) -> str:
     """API-Schlüssel aus MISTRAL_API_KEY, sonst aus .env im Arbeitsverzeichnis."""
-    schluessel = os.environ.get("MISTRAL_API_KEY", "").strip()
+    schluessel = os.environ.get("MISTRAL_API_KEY", "").strip().strip("'\"")
     if not schluessel:
         schluessel = (
-            lade_env(arbeitsverzeichnis / ENV_DATEI).get("MISTRAL_API_KEY", "").strip()
+            lade_env(arbeitsverzeichnis / ENV_DATEI)
+            .get("MISTRAL_API_KEY", "")
+            .strip()
+            .strip("'\"")
         )
     if not schluessel:
         raise AgentFehler(
