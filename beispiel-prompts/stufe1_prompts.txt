@@ -15,6 +15,11 @@ Antworte ausschließlich mit einem JSON-Objekt dieser Form:
 {"referenznummern": ["<Referenznummer>", "..."]}
 Nenne die Referenznummern aller Angebote, die du behalten willst. Nutze dabei
 nur Referenznummern, die in den übergebenen Datensätzen vorkommen.
+Verwende ausschließlich die ASCII-Anführungszeichen " als JSON-Begrenzer;
+innerhalb von Zeichenketten verwende niemals Anführungszeichen irgendeiner
+Art. Begründung: Das JSON der Antwort muss gültig bleiben - Anführungs-
+zeichen innerhalb von Zeichenketten zerstören das JSON und brechen die
+Auswertung ab.
 
 Jobprofile:
 [[HIER: Deine Jobprofile eintragen]]

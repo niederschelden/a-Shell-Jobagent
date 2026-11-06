@@ -31,7 +31,7 @@ Das Wheel `a_shell_jobagent-…-py3-none-any.whl` (Ordner `dist/`) z. B. per
 AirDrop oder aus iCloud in a-Shell holen und installieren:
 
 ```
-pip install a_shell_jobagent-0.1.2-py3-none-any.whl
+pip install a_shell_jobagent-0.1.3-py3-none-any.whl
 ```
 
 ### Desktop

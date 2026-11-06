@@ -30,6 +30,11 @@ Antworte ausschließlich mit einem JSON-Objekt dieser Form:
 {"referenznummern": ["<Referenznummer>", "..."]}
 Nenne die Referenznummern aller Angebote, die du behalten willst. Nutze dabei
 nur Referenznummern, die in den übergebenen Datensätzen vorkommen.
+Verwende ausschließlich die ASCII-Anführungszeichen " als JSON-Begrenzer;
+innerhalb von Zeichenketten verwende niemals Anführungszeichen irgendeiner
+Art. Begründung: Das JSON der Antwort muss gültig bleiben - Anführungs-
+zeichen innerhalb von Zeichenketten zerstören das JSON und brechen die
+Auswertung ab.
 
 Jobprofile:
 [[HIER: Deine Jobprofile eintragen]]
@@ -56,6 +61,13 @@ Antworte ausschließlich mit einem JSON-Objekt dieser Form:
 ]}
 Bewerte JEDES übergebene Angebot genau einmal. Nenne für jede Entscheidung
 eine kurze Begründung von mindestens einem Satz - auch bei Ablehnung.
+Verwende ausschließlich die ASCII-Anführungszeichen " als JSON-Begrenzer.
+Innerhalb von Zeichenketten (insbesondere in den Begründungen) verwende
+niemals Anführungszeichen irgendeiner Art: Zitiere die belegende Stelle
+aus dem Angebot wörtlich, aber ohne sie in Anführungszeichen zu setzen.
+Begründung: Das JSON der Antwort muss gültig bleiben - unmaskierte
+Anführungszeichen innerhalb von Zeichenketten zerstören das JSON und
+brechen die Auswertung ab.
 
 Anforderungen und Präferenzen:
 [[HIER: Deine Anforderungen, Stärken, Schwächen, Wünsche und Abneigungen eintragen]]
