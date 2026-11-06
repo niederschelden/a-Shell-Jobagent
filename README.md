@@ -15,7 +15,7 @@ Das Wheel `a_shell_jobagent-…-py3-none-any.whl` (Ordner `dist/`) z. B. per
 AirDrop oder aus iCloud in a-Shell holen und installieren:
 
 ```
-pip install a_shell_jobagent-1.0.1-py3-none-any.whl
+pip install a_shell_jobagent-0.1.1-py3-none-any.whl
 ```
 
 ### Desktop
@@ -105,6 +105,19 @@ mitgelieferte Vorlage hinein und bricht ab:
 
 Eine existierende Datei wird nie überschrieben. Eine leere Datei oder eine
 mit unverändertem Platzhalter führt zum Abbruch mit Fehlermeldung.
+
+### Beispiel-Promptdateien
+
+Im Ordner `beispiel-prompts/` liegen die drei generischen Vorlagen als
+Dateien – als Ausgangspunkt, ohne persönliche Kriterien. Sie enthalten
+denselben Aufbau, den das Programm beim ersten Lauf automatisch erzeugt:
+
+```
+cp beispiel-prompts/stufe1_prompts.txt beispiel-prompts/stufe2_prompts.txt beispiel-prompts/bericht_prompts.txt ~/Documents/Jobagent/
+```
+
+Danach nur noch die Platzhalter in Stufe 1 und 2 personalisieren und die
+Berichtsvorlage prüfen.
 
 ## API-Schlüssel (.env)
 
