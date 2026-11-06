@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import email
+import io
 import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from a_shell_agent import debug
 from a_shell_agent.api import ArbeitsamtKlient
 from a_shell_agent.fehler import AgentFehler
 from a_shell_agent.konfiguration import (
@@ -17,6 +22,7 @@ from a_shell_agent.konfiguration import (
     ZEITRAUM_WERTE,
     baue_konfiguration,
 )
+from a_shell_agent.llm import MistralKlient
 from a_shell_agent.main import DATEI_DETAILS, DATEI_STELLEN, fuehre_aus
 from a_shell_agent.pipeline import stufe1_filtern, stufe2_bewerten
 from a_shell_agent.prompts import (
@@ -64,10 +70,21 @@ class FakeMistral:
         self.aufrufe: list[dict[str, Any]] = []
 
     def frage(
-        self, modell: str, system: str, nutzer: str, json_objekt: bool = True
+        self,
+        modell: str,
+        system: str,
+        nutzer: str,
+        json_objekt: bool = True,
+        debug_bezeichnung: str = "",
     ) -> str:
         self.aufrufe.append(
-            {"modell": modell, "system": system, "nutzer": nutzer, "json": json_objekt}
+            {
+                "modell": modell,
+                "system": system,
+                "nutzer": nutzer,
+                "json": json_objekt,
+                "debug_bezeichnung": debug_bezeichnung,
+            }
         )
         if not self.antworten:
             raise AssertionError("FakeMistral: keine Antwort mehr vorbereitet")
@@ -250,6 +267,8 @@ def test_ablauf_vollstaendig(
     schreibe_prompts(tmp_path)
     code = fuehre_aus(konfig(), arbeitsamt, mistral, tmp_path)
     assert code == 0
+    out = capsys.readouterr().out
+    assert not any(zeile.startswith(("[API]", "[LLM]")) for zeile in out.splitlines())
     bericht = tmp_path / "Bericht-57080-7-25.txt"
     assert bericht.read_text(encoding="utf-8") == "Das ist der Bericht."
     assert not (tmp_path / DATEI_STELLEN).exists()
@@ -342,6 +361,201 @@ def test_ablauf_stufe3_leere_antwort(tmp_path: Path) -> None:
         fuehre_aus(
             konfig(), FakeArbeitsamt([[ANGEBOT]], {"R1": DETAIL}), mistral, tmp_path
         )
+
+
+# ------------------------------------------------------------------ Debug
+
+
+class FakeAntwort:
+    def __init__(self, daten: bytes) -> None:
+        self._daten = daten
+
+    def read(self) -> bytes:
+        return self._daten
+
+    def __enter__(self) -> FakeAntwort:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
+
+def _http_fehler(code: int) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError(
+        "url", code, "Fehler", email.message.Message(), io.BytesIO(b"{}")
+    )
+
+
+def test_debug_ohne_schalter_keine_zeilen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    debug.aktiviere(konfig(debug=False))
+    klient = ArbeitsamtKlient()
+    urls = ["https://rest.arbeitsagentur.de/x"]
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda req, timeout: FakeAntwort(b"{}")
+    )
+    klient._get_json(urls[0])
+    out = capsys.readouterr().out
+    assert not any(z.startswith(("[API]", "[LLM]")) for z in out.splitlines())
+
+
+def test_debug_api_zeilen_vor_jeder_anfrage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    debug.aktiviere(konfig(debug=True))
+    klient = ArbeitsamtKlient()
+    klient.PAUSE_SEKUNDEN = 0.0
+    seiten = [
+        {"stellenangebote": [{"referenznummer": f"R{i}"} for i in range(2)]},
+    ]
+
+    def fake_urlopen(req: Any, timeout: float) -> FakeAntwort:
+        urls.append(req.full_url)
+        return FakeAntwort(json.dumps(seiten.pop(0)).encode("utf-8"))
+
+    urls: list[str] = []
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    klient.hole_angebote("57080", 7, 25)
+    out = capsys.readouterr().out
+    api_zeilen = [z for z in out.splitlines() if z.startswith("[API]")]
+    assert api_zeilen == [f"[API] GET {u}" for u in urls]
+    assert urls[0].endswith("size=100&page=1")
+
+
+def test_debug_api_wiederholungsversuche(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    debug.aktiviere(konfig(debug=True))
+    klient = ArbeitsamtKlient()
+    klient.BACKOFF_SEKUNDEN = 0.001
+    versuche: list[int] = []
+
+    def fake_urlopen(req: Any, timeout: float) -> FakeAntwort:
+        versuche.append(1)
+        if len(versuche) < 3:
+            raise _http_fehler(429)
+        return FakeAntwort(b"{}")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    klient._get_json("https://rest.arbeitsagentur.de/y")
+    out = capsys.readouterr().out
+    api_zeilen = [z for z in out.splitlines() if z.startswith("[API]")]
+    assert len(versuche) == 3
+    assert len(api_zeilen) == 3
+    assert all(z == "[API] GET https://rest.arbeitsagentur.de/y" for z in api_zeilen)
+
+
+def test_debug_llm_zeilen(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    debug.aktiviere(konfig(debug=True))
+    klient = MistralKlient("schluessel")
+    korpus = {"choices": [{"message": {"content": "ok"}}]}
+    daten: list[bytes] = []
+
+    def fake_urlopen(req: Any, timeout: float) -> FakeAntwort:
+        daten.append(bytes(req.data))
+        return FakeAntwort(json.dumps(korpus).encode("utf-8"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    klient.frage(
+        "mistral-medium-latest",
+        "system",
+        "nutzer",
+        json_objekt=True,
+        debug_bezeichnung="Stufe 1 JSON",
+    )
+    out = capsys.readouterr().out
+    erwartet = (
+        f"[LLM] Sende Stufe 1 JSON an mistral-medium-latest "
+        f"({round(len(daten[0]) / 1000)} KB)"
+    )
+    assert erwartet in out.splitlines()
+    assert "nutzer" not in out  # Inhalt erscheint nie in der Debug-Ausgabe
+
+
+def test_debug_llm_wiederholungsversuche(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    debug.aktiviere(konfig(debug=True))
+    klient = MistralKlient("schluessel")
+    klient.BACKOFF_SEKUNDEN = 0.001
+    versuche: list[int] = []
+
+    def fake_urlopen(req: Any, timeout: float) -> FakeAntwort:
+        versuche.append(1)
+        if len(versuche) < 2:
+            raise _http_fehler(500)
+        return FakeAntwort(
+            json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode("utf-8")
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    klient.frage("m", "s", "n", debug_bezeichnung="Stufe 2 JSON")
+    out = capsys.readouterr().out
+    llm_zeilen = [z for z in out.splitlines() if z.startswith("[LLM]")]
+    assert len(versuche) == 2
+    assert len(llm_zeilen) == 2
+    assert all(z.startswith("[LLM] Sende Stufe 2 JSON an m (") for z in llm_zeilen)
+
+
+def test_debug_bezeichnungen_der_stufen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Im Debug-Modus tragen die drei Aufruforte ihre hartkodierte
+    Bezeichnung und das Modell aus der Konfiguration."""
+    debug.aktiviere(
+        baue_konfiguration(
+            [
+                "57080",
+                "7",
+                "25",
+                "--debug",
+                "--llm1",
+                "m1",
+                "--llm2",
+                "m2",
+                "--llm3",
+                "m3",
+            ]
+        )
+    )
+    mistral = FakeMistral(
+        [
+            '{"referenznummern": ["R1"]}',
+            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}',
+            "Bericht",
+        ]
+    )
+    schreibe_prompts(tmp_path)
+    arbeitsamt = FakeArbeitsamt([[ANGEBOT]], {"R1": DETAIL})
+    assert (
+        fuehre_aus(
+            baue_konfiguration(
+                [
+                    "57080",
+                    "7",
+                    "25",
+                    "--debug",
+                    "--llm1",
+                    "m1",
+                    "--llm2",
+                    "m2",
+                    "--llm3",
+                    "m3",
+                ]
+            ),
+            arbeitsamt,
+            mistral,
+            tmp_path,
+        )
+        == 0
+    )
+    bezeichnungen = [a["debug_bezeichnung"] for a in mistral.aufrufe]
+    modelle = [a["modell"] for a in mistral.aufrufe]
+    assert bezeichnungen == ["Stufe 1 JSON", "Stufe 2 JSON", "Stufe 3 Berichtsdaten"]
+    assert modelle == ["m1", "m2", "m3"]
 
 
 # ---------------------------------------------------------- Prompt-Dateien

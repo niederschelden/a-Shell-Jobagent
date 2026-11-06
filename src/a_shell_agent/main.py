@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from a_shell_agent.api import ArbeitsamtKlient
+from a_shell_agent.debug import aktiviere as debug_aktiviere
 from a_shell_agent.fehler import AgentFehler
 from a_shell_agent.konfiguration import Konfiguration, baue_konfiguration
 from a_shell_agent.llm import MistralKlient
@@ -62,6 +63,7 @@ def fuehre_aus(
     arbeitsverzeichnis: Path,
 ) -> int:
     """Führt die Schritte 2 bis 9 aus; Step 1 (Parameter) ist bereits geprüft."""
+    debug_aktiviere(konfig)
     angebote = arbeitsamt.hole_angebote(konfig.plz, konfig.zeitraum, konfig.entfernung)
     _schreibe_json(arbeitsverzeichnis / DATEI_STELLEN, angebote)
     if not angebote:

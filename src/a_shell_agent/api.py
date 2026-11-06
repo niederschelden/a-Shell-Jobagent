@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from a_shell_agent.debug import debug_zeile
 from a_shell_agent.fehler import AgentFehler
 
 SUCHE_URL = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
@@ -74,6 +75,7 @@ class ArbeitsamtKlient:
         fehler: BaseException | None = None
         for versuch in range(1, self.MAX_VERSUCHE + 1):
             try:
+                debug_zeile(f"[API] GET {url}")
                 anfrage = urllib.request.Request(url, headers=API_HEADER)
                 with urllib.request.urlopen(
                     anfrage, timeout=self.TIMEOUT_SEKUNDEN

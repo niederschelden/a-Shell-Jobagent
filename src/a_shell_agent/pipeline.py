@@ -36,7 +36,9 @@ def stufe1_filtern(
     der zu behaltenden Angebote. Unbekannte Referenznummern werden verworfen.
     """
     nutzer = json.dumps(daten, ensure_ascii=False)
-    antwort = mistral.frage(modell, prompt, nutzer, json_objekt=True)
+    antwort = mistral.frage(
+        modell, prompt, nutzer, json_objekt=True, debug_bezeichnung="Stufe 1 JSON"
+    )
     gewaehlt = _referenznummern_aus(antwort)
     bekannt = {d.get("referenznummer") for d in daten}
     ungueltig = [r for r in gewaehlt if r not in bekannt]
@@ -62,7 +64,9 @@ def stufe2_bewerten(
     for datensatz in daten:
         referenznummer = str(datensatz.get("referenznummer", ""))
         nutzer = json.dumps(datensatz, ensure_ascii=False)
-        antwort = mistral.frage(modell, prompt, nutzer, json_objekt=True)
+        antwort = mistral.frage(
+            modell, prompt, nutzer, json_objekt=True, debug_bezeichnung="Stufe 2 JSON"
+        )
         objekt = _json_objekt_aus(antwort, f"Stufe 2 ({referenznummer})")
         entscheidung = str(objekt.get("entscheidung", "")).strip().lower()
         angenommen = entscheidung in ANGENOMMEN_WERTE
@@ -97,7 +101,13 @@ def stufe3_bericht(
     for datensatz in daten:
         teile.append(json.dumps(datensatz, ensure_ascii=False))
     nutzer = "\n\n".join(teile)
-    bericht = mistral.frage(modell, prompt, nutzer, json_objekt=False)
+    bericht = mistral.frage(
+        modell,
+        prompt,
+        nutzer,
+        json_objekt=False,
+        debug_bezeichnung="Stufe 3 Berichtsdaten",
+    )
     if not bericht.strip():
         raise AgentFehler("Mistral hat für den Bericht eine leere Antwort geliefert.")
     return bericht

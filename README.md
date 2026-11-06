@@ -39,7 +39,7 @@ python -m a_shell_agent <PLZ> <ZEITRAUM> <ENTFERNUNG> [--debug] [--llm1 MODELL] 
 | `<PLZ>` | Postleitzahl, genau 5 Ziffern |
 | `<ZEITRAUM>` | veröffentlicht seit N Tagen; erlaubt: 1, 3, 7, 14, 30 |
 | `<ENTFERNUNG>` | Suchradius in km, ganze Zahl 1 bis 200 |
-| `--debug` | `stellen.json` und `details.json` am Ende nicht löschen |
+| `--debug` | `stellen.json` und `details.json` am Ende nicht löschen; zusätzlich Debug-Zeilen auf stdout: `[API] GET <url>` vor jeder Arbeitsamt-Anfrage (inkl. Wiederholungen) und `[LLM] Sende <Bezeichnung> an <modell> (<KB>)` vor jeder Mistral-Anfrage |
 | `--llm1 MODELL` | Mistral-Modell Stufe 1 (Aussortieren), sonst `mistral-medium-latest` |
 | `--llm2 MODELL` | Mistral-Modell Stufe 2 (Positivauswahl), sonst `mistral-medium-latest` |
 | `--llm3 MODELL` | Mistral-Modell Stufe 3 (Bericht), sonst `mistral-medium-latest` |

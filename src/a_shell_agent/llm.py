@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from a_shell_agent.debug import debug_zeile
 from a_shell_agent.fehler import AgentFehler
 
 ENDPOINT = "https://api.mistral.ai/v1/chat/completions"
@@ -26,12 +27,19 @@ class MistralKlient:
         self._schluessel = schluessel
 
     def frage(
-        self, modell: str, system: str, nutzer: str, json_objekt: bool = True
+        self,
+        modell: str,
+        system: str,
+        nutzer: str,
+        json_objekt: bool = True,
+        debug_bezeichnung: str = "",
     ) -> str:
         """Sendet System- und Nutzerinhalt; gibt den Antworttext zurück.
 
         json_objekt=True fordert die Antwort als JSON-Objekt an (Stufen 1/2);
-        Stufe 3 (Bericht) ruft ohne response_format auf.
+        Stufe 3 (Bericht) ruft ohne response_format auf. debug_bezeichnung ist
+        die am Aufrufort hartkodierte Bezeichnung des Inhalts, die im Debug-
+        Modus ausgegeben wird (nie der Inhalt selbst).
         """
         body: dict[str, Any] = {
             "model": modell,
@@ -48,6 +56,10 @@ class MistralKlient:
         fehler: BaseException | None = None
         for versuch in range(1, self.MAX_VERSUCHE + 1):
             try:
+                debug_zeile(
+                    f"[LLM] Sende {debug_bezeichnung} an {modell} "
+                    f"({round(len(daten) / 1000)} KB)"
+                )
                 anfrage = urllib.request.Request(
                     ENDPOINT,
                     data=daten,
