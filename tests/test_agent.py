@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+import a_shell_agent.pipeline as pipeline
 from a_shell_agent import debug
 from a_shell_agent.api import ArbeitsamtKlient
 from a_shell_agent.fehler import AgentFehler
@@ -210,8 +211,7 @@ def test_stufe1_ungueltiges_json_bricht_ab() -> None:
 def test_stufe2_bewertung_und_cache() -> None:
     mistral = FakeMistral(
         [
-            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "passt"}',
-            '{"referenznummer": "R2", "entscheidung": "abgelehnt", "begruendung": "nein"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "passt"}, {"referenznummer": "R2", "entscheidung": "abgelehnt", "begruendung": "nein"}]}',
         ]
     )
     bewertungen = stufe2_bewerten([DETAIL, ANGEBOT2], "prompt", mistral, "modell")
@@ -219,7 +219,7 @@ def test_stufe2_bewertung_und_cache() -> None:
         (True, "passt"),
         (False, "nein"),
     ]
-    assert json.loads(mistral.aufrufe[0]["nutzer"]) == DETAIL
+    assert json.loads(mistral.aufrufe[0]["nutzer"]) == [DETAIL, ANGEBOT2]
     assert mistral.aufrufe[0]["json"] is True
 
 
@@ -227,6 +227,51 @@ def test_stufe2_ungueltiges_json_bricht_ab() -> None:
     mistral = FakeMistral(["[]"])
     with pytest.raises(AgentFehler):
         stufe2_bewerten([DETAIL], "prompt", mistral, "modell")
+
+
+def test_stufe2_batching_nach_groesse(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pipeline, "STUFE2_MAX_BYTES", 1000)
+    gross = {"daten": "x" * 900}  # ~900 Bytes je Datensatz
+    mistral = FakeMistral(
+        [
+            '{"bewertungen": [{"referenznummer": "R0", "entscheidung": "abgelehnt", "begruendung": "a"}]}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "abgelehnt", "begruendung": "b"}]}',
+            '{"bewertungen": [{"referenznummer": "R2", "entscheidung": "angenommen", "begruendung": "c"}]}',
+        ]
+    )
+    bewertungen = stufe2_bewerten(
+        [
+            gross | {"referenznummer": "R0"},
+            gross | {"referenznummer": "R1"},
+            gross | {"referenznummer": "R2"},
+        ],
+        "prompt",
+        mistral,
+        "modell",
+    )
+    assert len(mistral.aufrufe) == 3  # drei Batches à einem Datensatz
+    assert [b.beggruendung for b in bewertungen] == ["a", "b", "c"]
+
+
+def test_stufe2_umlaut_schluessel() -> None:
+    mistral = FakeMistral(
+        [
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "Ja", "begr\u00fcndung": "passt gut"}]}'
+        ]
+    )
+    bewertungen = stufe2_bewerten([DETAIL], "prompt", mistral, "modell")
+    assert bewertungen[0].angenommen is True
+    assert bewertungen[0].beggruendung == "passt gut"
+
+
+def test_stufe2_fehlende_bewertung_gilt_als_abgelehnt(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    mistral = FakeMistral(['{"bewertungen": []}'])
+    bewertungen = stufe2_bewerten([DETAIL], "prompt", mistral, "modell")
+    assert bewertungen[0].angenommen is False
+    assert bewertungen[0].beggruendung == "vom Modell nicht bewertet"
+    assert "nicht bewertet" in capsys.readouterr().out
 
 
 def test_feld_agnostizismus_umbenannte_felder() -> None:
@@ -243,11 +288,13 @@ def test_feld_agnostizismus_umbenannte_felder() -> None:
     assert json.loads(mistral.aufrufe[0]["nutzer"]) == [seltsam]
 
     mistral2 = FakeMistral(
-        ['{"referenznummer": "R9", "entscheidung": "angenommen", "begruendung": "ok"}']
+        [
+            '{"bewertungen": [{"referenznummer": "R9", "entscheidung": "angenommen", "begruendung": "ok"}]}'
+        ]
     )
     bewertungen = stufe2_bewerten([seltsam], "prompt", mistral2, "modell")
     assert bewertungen[0].angenommen is True
-    assert json.loads(mistral2.aufrufe[0]["nutzer"]) == seltsam
+    assert json.loads(mistral2.aufrufe[0]["nutzer"]) == [seltsam]
 
 
 # ---------------------------------------------------------------- Ablauf
@@ -260,7 +307,7 @@ def test_ablauf_vollstaendig(
     mistral = FakeMistral(
         [
             '{"referenznummern": ["R1"]}',
-            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "passt"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "passt"}]}',
             "Das ist der Bericht.",
         ]
     )
@@ -283,7 +330,7 @@ def test_ablauf_debug_laesst_dateien_liegen(tmp_path: Path) -> None:
     mistral = FakeMistral(
         [
             '{"referenznummern": ["R1"]}',
-            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}]}',
             "Bericht",
         ]
     )
@@ -317,7 +364,7 @@ def test_ablauf_stufe2_leer(tmp_path: Path, capsys: pytest.CaptureFixture[str]) 
     mistral = FakeMistral(
         [
             '{"referenznummern": ["R1"]}',
-            '{"referenznummer": "R1", "entscheidung": "abgelehnt", "begruendung": "nein"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "abgelehnt", "begruendung": "nein"}]}',
         ]
     )
     schreibe_prompts(tmp_path)
@@ -332,7 +379,7 @@ def test_ablauf_detailabruf_teilweise_gescheitert(tmp_path: Path) -> None:
     mistral = FakeMistral(
         [
             '{"referenznummern": ["R1", "R2"]}',
-            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}]}',
             "Bericht",
         ]
     )
@@ -352,7 +399,7 @@ def test_ablauf_stufe3_leere_antwort(tmp_path: Path) -> None:
     mistral = FakeMistral(
         [
             '{"referenznummern": ["R1"]}',
-            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}]}',
             "   ",
         ]
     )
@@ -524,7 +571,7 @@ def test_debug_bezeichnungen_der_stufen(
     mistral = FakeMistral(
         [
             '{"referenznummern": ["R1"]}',
-            '{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "ok"}]}',
             "Bericht",
         ]
     )

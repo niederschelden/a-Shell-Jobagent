@@ -11,11 +11,17 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from a_shell_agent.debug import debug_zeile
 from a_shell_agent.fehler import AgentFehler
 from a_shell_agent.konfiguration import Konfiguration
 from a_shell_agent.llm import MistralKlient
 
 ANGENOMMEN_WERTE = {"angenommen", "ja", "akzeptiert", "true"}
+
+# Obergrenze je Stufe-2-Anfrage in Bytes (~40k Tokens); ein Call für alles
+# kann je nach Routing-Version das 128k-Kontextfenster von Mistral Medium
+# überschreiten (Prompt und Antwort zählen beide hinein).
+STUFE2_MAX_BYTES = 150_000
 
 
 @dataclass(frozen=True)
@@ -53,31 +59,92 @@ def stufe1_filtern(
 def stufe2_bewerten(
     daten: list[dict[str, Any]], prompt: str, mistral: MistralKlient, modell: str
 ) -> list[Bewertung]:
-    """Filter-Stufe 2: Positivauswahl je Detail-Datensatz, einzeln bewertet.
+    """Filter-Stufe 2: Positivauswahl der Detail-Datensätze in Batches.
 
-    Implementiert als Ja/Nein-Entscheidung je Job: Das Modell liefert pro
-    Datensatz Referenznummer, Entscheidung (angenommen/abgelehnt) und
-    Begründung; angenommen ist, was die Prompt-Datei als Annahme deklariert
-    (Wert aus ANGENOMMEN_WERTE). Die Bedeutung legt allein die Prompt-Datei fest.
+    Implementiert als Ja/Nein-Entscheidung je Job. Die Datensätze gehen roh
+    und vollständig in möglichst wenigen Anfragen: gesammelt in Batches bis
+    STUFE2_MAX_BYTES (~40k Tokens, sicher im Kontextfenster von
+    mistral-medium-latest; ein einziger Call für alles könnte je nach
+    Routing-Version das 128k-Fenster sprengen). Je Batch liefert das Modell
+    eine Liste mit Referenznummer, Entscheidung (angenommen/abgelehnt) und
+    Begründung; angenommen ist der Wert aus ANGENOMMEN_WERTE. Die Bedeutung
+    legt allein die Prompt-Datei fest.
     """
     bewertungen: list[Bewertung] = []
-    for datensatz in daten:
-        referenznummer = str(datensatz.get("referenznummer", ""))
-        nutzer = json.dumps(datensatz, ensure_ascii=False)
+    for batch in _baetche(daten):
+        nutzer = json.dumps(batch, ensure_ascii=False)
         antwort = mistral.frage(
             modell, prompt, nutzer, json_objekt=True, debug_bezeichnung="Stufe 2 JSON"
         )
-        objekt = _json_objekt_aus(antwort, f"Stufe 2 ({referenznummer})")
-        entscheidung = str(objekt.get("entscheidung", "")).strip().lower()
-        angenommen = entscheidung in ANGENOMMEN_WERTE
-        beggruendung = str(objekt.get("begruendung", "")).strip()
-        bewertungen.append(Bewertung(referenznummer, angenommen, beggruendung))
+        debug_zeile(f"[LLM] Antwort Stufe 2: {antwort[:500]}")
+        bewertungen.extend(_bewertungen_aus(antwort, batch))
+    for b in bewertungen:
         print(
-            f"[Stufe 2] {referenznummer}: "
-            f"{'angenommen' if angenommen else 'abgelehnt'} - {beggruendung}",
+            f"[Stufe 2] {b.referenznummer}: "
+            f"{'angenommen' if b.angenommen else 'abgelehnt'} - {b.beggruendung}",
             flush=True,
         )
     return bewertungen
+
+
+def _baetche(daten: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Teilt die Datensätze greedig in Batches bis zur Byte-Obergrenze."""
+    baetche: list[list[dict[str, Any]]] = []
+    aktuell: list[dict[str, Any]] = []
+    groesse = 2  # "[]" plus Reserve für Trennzeichen
+    for datensatz in daten:
+        n = len(json.dumps(datensatz, ensure_ascii=False).encode("utf-8"))
+        if aktuell and groesse + n > STUFE2_MAX_BYTES:
+            baetche.append(aktuell)
+            aktuell, groesse = [], 2
+        aktuell.append(datensatz)
+        groesse += n + 1
+    if aktuell:
+        baetche.append(aktuell)
+    return baetche
+
+
+def _bewertungen_aus(antwort: str, batch: list[dict[str, Any]]) -> list[Bewertung]:
+    """Liest die Bewertungen eines Batches; tolerante Schlüssel (Umlaute)."""
+    objekt = _json_objekt_aus(antwort, "Stufe 2")
+    eintraege = [e for e in objekt.values() if isinstance(e, list)]
+    bewertet: dict[str, Bewertung] = {}
+    for eintrag in eintraege:
+        for item in eintrag:
+            if not isinstance(item, dict):
+                continue
+            norm = {_normiere(k): v for k, v in item.items()}
+            refnr = str(norm.get("referenznummer", "")).strip()
+            if not refnr:
+                continue
+            entscheidung = str(norm.get("entscheidung", "")).strip().lower()
+            beggruendung = str(norm.get("begruendung", "")).strip()
+            bewertet[refnr] = Bewertung(
+                refnr, entscheidung in ANGENOMMEN_WERTE, beggruendung
+            )
+    resultate: list[Bewertung] = []
+    for datensatz in batch:
+        refnr = str(datensatz.get("referenznummer", ""))
+        if refnr in bewertet:
+            resultate.append(bewertet[refnr])
+        else:
+            print(
+                f"[Warnung] Stufe 2: {refnr} wurde vom Modell nicht bewertet, "
+                f"gilt als abgelehnt.",
+                flush=True,
+            )
+            resultate.append(Bewertung(refnr, False, "vom Modell nicht bewertet"))
+    return resultate
+
+
+def _normiere(schluessel: str) -> str:
+    klein = schluessel.strip().lower()
+    return (
+        klein.replace("ü", "ue")
+        .replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ß", "ss")
+    )
 
 
 def stufe3_bericht(

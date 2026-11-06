@@ -67,10 +67,13 @@ python -m a_shell_agent 57080 7 25
    Datensätze roh an das Modell, zurück kommen die Referenznummern der zu
    behaltenden Angebote. Nichts übrig: `Keine Daten vorhanden`, Ende (Exit 0).
 5. Details der Kandidaten holen und als `details.json` schreiben.
-6. LLM-Stufe 2 (Positivauswahl): Prompt-Datei `stufe2_prompts.txt`, jeder
-   Detail-Datensatz einzeln und vollständig an das Modell; Antwort je Job:
-   Referenznummer, Entscheidung (angenommen/abgelehnt), Begründung. Kein Job
-   angenommen: Meldung `Keine Jobs gefunden`, Ende (Exit 0).
+6. LLM-Stufe 2 (Positivauswahl): Prompt-Datei `stufe2_prompts.txt`, die
+   Detail-Datensätze vollständig und roh in wenigen Batches (max. ~150 KB
+   je Anfrage, damit der Kontext von Mistral Medium sicher reicht) an das
+   Modell; Antwort je Job: Referenznummer, Entscheidung
+   (angenommen/abgelehnt), Begründung (Schlüssel tolerant gegenüber
+   Umlaut-Varianten wie `begründung`). Kein Job angenommen: Meldung
+   `Keine Jobs gefunden`, Ende (Exit 0).
 7. LLM-Stufe 3 (Bericht): Prompt-Datei `bericht_prompts.txt`, Detail-Datensätze
    der angenommenen Jobs plus Suchparameter an das Modell; die Antwort wird
    unverändert als `Bericht-<PLZ>-<ZEITRAUM>-<ENTFERNUNG>.txt` gespeichert

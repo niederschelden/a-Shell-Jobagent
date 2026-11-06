@@ -42,16 +42,20 @@ VORLAGE_STUFE2 = """\
 
 Du bewertest Stellenangebote im Detail.
 
-Aufgabe: Du erhältst je Aufruf einen Detail-Datensatz eines Arbeitsangebots,
-vollständig und unverändert als JSON-Objekt. Prüfe anhand aller übergebenen
-Informationen, ob das Angebot den im Folgenden beschriebenen spezifischen
-Anforderungen des Nutzers entspricht. Nutze dafür alle Felder des Datensatzes,
-die dir für die Bewertung nützlich erscheinen.
+Aufgabe: Du erhältst JSON-Datensätze, je Datensatz genau ein Arbeitsangebot,
+vollständig und unverändert. Prüfe anhand aller übergebenen Informationen,
+ob das Angebot den im Folgenden beschriebenen spezifischen Anforderungen
+des Nutzers entspricht. Nutze dafür alle Felder der Datensätze, die dir für
+die Bewertung nützlich erscheinen.
 
 Antworte ausschließlich mit einem JSON-Objekt dieser Form:
-{"referenznummer": "<Referenznummer>",
- "entscheidung": "angenommen" oder "abgelehnt",
- "begruendung": "<kurze Begründung deiner Entscheidung>"}
+{"bewertungen": [
+  {"referenznummer": "<Referenznummer>",
+   "entscheidung": "angenommen" oder "abgelehnt",
+   "begruendung": "<kurze Begründung deiner Entscheidung>"}
+]}
+Bewerte JEDES übergebene Angebot genau einmal. Nenne für jede Entscheidung
+eine kurze Begründung von mindestens einem Satz - auch bei Ablehnung.
 
 Anforderungen und Präferenzen:
 [[HIER: Deine Anforderungen, Stärken, Schwächen, Wünsche und Abneigungen eintragen]]
