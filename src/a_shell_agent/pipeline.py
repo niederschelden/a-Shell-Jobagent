@@ -18,10 +18,10 @@ from a_shell_agent.llm import MistralKlient
 
 ANGENOMMEN_WERTE = {"angenommen", "ja", "akzeptiert", "true"}
 
-# Obergrenze je Stufe-2-Anfrage in Bytes (~40k Tokens); ein Call für alles
-# kann je nach Routing-Version das 128k-Kontextfenster von Mistral Medium
-# überschreiten (Prompt und Antwort zählen beide hinein).
-STUFE2_MAX_BYTES = 150_000
+# Obergrenze je LLM-Anfrage in Bytes (~40k Tokens); ein Call für alles
+# kann das Kontextfenster von Mistral Medium sprengen (Prompt und Antwort
+# zählen beide hinein; gemessene Grenze aktuell 262.144 Tokens).
+BATCH_MAX_BYTES = 150_000
 
 
 @dataclass(frozen=True)
@@ -38,15 +38,20 @@ def stufe1_filtern(
 ) -> list[dict[str, Any]]:
     """Filter-Stufe 1: Aussortieren anhand der Überschriften-Datensätze.
 
-    Ein Aufruf mit allen Datensätzen; die Antwort nennt die Referenznummern
-    der zu behaltenden Angebote. Unbekannte Referenznummern werden verworfen.
+    Die Datensätze gehen roh und vollständig in Batches bis BATCH_MAX_BYTES
+    (wie Stufe 2: ein Call für alles kann das Kontextfenster sprengen). Je
+    Batch nennt die Antwort die Referenznummern der zu behaltenden Angebote;
+    vereinigt werden sie über alle Batches. Unbekannte Referenznummern
+    werden verworfen.
     """
-    nutzer = json.dumps(daten, ensure_ascii=False)
-    antwort = mistral.frage(
-        modell, prompt, nutzer, json_objekt=True, debug_bezeichnung="Stufe 1 JSON"
-    )
-    gewaehlt = _referenznummern_aus(antwort)
     bekannt = {d.get("referenznummer") for d in daten}
+    gewaehlt: list[str] = []
+    for batch in _baetche(daten):
+        nutzer = json.dumps(batch, ensure_ascii=False)
+        antwort = mistral.frage(
+            modell, prompt, nutzer, json_objekt=True, debug_bezeichnung="Stufe 1 JSON"
+        )
+        gewaehlt.extend(_referenznummern_aus(antwort))
     ungueltig = [r for r in gewaehlt if r not in bekannt]
     if ungueltig:
         print(
@@ -77,14 +82,30 @@ def stufe2_bewerten(
             modell, prompt, nutzer, json_objekt=True, debug_bezeichnung="Stufe 2 JSON"
         )
         debug_zeile(f"[LLM] Antwort Stufe 2: {antwort[:500]}")
-        bewertungen.extend(_bewertungen_aus(antwort, batch))
-    for b in bewertungen:
-        print(
-            f"[Stufe 2] {b.referenznummer}: "
-            f"{'angenommen' if b.angenommen else 'abgelehnt'} - {b.beggruendung}",
-            flush=True,
-        )
+        resultate = _bewertungen_aus(antwort, batch)
+        for datensatz, b in zip(batch, resultate, strict=True):
+            print(
+                f"[Stufe 2] {b.referenznummer}{_anzeigetitel(datensatz)}: "
+                f"{'angenommen' if b.angenommen else 'abgelehnt'} - {b.beggruendung}",
+                flush=True,
+            )
+        bewertungen.extend(resultate)
     return bewertungen
+
+
+def _anzeigetitel(datensatz: dict[str, Any]) -> str:
+    """Rein für die Ausgabe: erster Titel-artiger Stringwert des Datensatzes.
+
+    Heuristik ohne Bewertungseinfluss: Schlüssel mit "titel"/"title" (nach
+    Normalisierung), sonst leerer Zusatz.
+    """
+    for schluessel, wert in datensatz.items():
+        if not isinstance(wert, str) or not wert:
+            continue
+        n = _normiere(schluessel)
+        if "titel" in n or "title" in n:
+            return f" ({wert})"
+    return ""
 
 
 def _baetche(daten: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -94,7 +115,7 @@ def _baetche(daten: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     groesse = 2  # "[]" plus Reserve für Trennzeichen
     for datensatz in daten:
         n = len(json.dumps(datensatz, ensure_ascii=False).encode("utf-8"))
-        if aktuell and groesse + n > STUFE2_MAX_BYTES:
+        if aktuell and groesse + n > BATCH_MAX_BYTES:
             baetche.append(aktuell)
             aktuell, groesse = [], 2
         aktuell.append(datensatz)
