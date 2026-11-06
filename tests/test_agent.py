@@ -429,7 +429,7 @@ def test_env_loader(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert hole_mistral_schluessel(tmp_path) == "aus-umgebung"
     monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-    assert hole_mistral_schluessel(tmp_path) == "aus-datei"
+    assert hole_mistral_schluessel(tmp_path) == "aus-datei-mit-quotes"
     (tmp_path / "ohne.env").write_text("", encoding="utf-8")
     with pytest.raises(AgentFehler, match="MISTRAL_API_KEY fehlt"):
         hole_mistral_schluessel(tmp_path / "ohne.env")
