@@ -230,7 +230,7 @@ def test_stufe2_ungueltiges_json_bricht_ab() -> None:
 
 
 def test_stufe2_batching_nach_groesse(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(pipeline, "STUFE2_MAX_BYTES", 1000)
+    monkeypatch.setattr(pipeline, "BATCH_MAX_BYTES", 1000)
     gross = {"daten": "x" * 900}  # ~900 Bytes je Datensatz
     mistral = FakeMistral(
         [
@@ -251,6 +251,54 @@ def test_stufe2_batching_nach_groesse(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert len(mistral.aufrufe) == 3  # drei Batches à einem Datensatz
     assert [b.beggruendung for b in bewertungen] == ["a", "b", "c"]
+
+
+def test_stufe1_batching_nach_groesse(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stufe 1 schickt Überschriften ebenfalls in Batches und vereinigt
+    die gewählten Referenznummern über alle Batches."""
+    monkeypatch.setattr(pipeline, "BATCH_MAX_BYTES", 1000)
+    daten = [{"referenznummer": f"R{i}", "daten": "x" * 900} for i in range(3)]
+    mistral = FakeMistral(
+        [
+            '{"referenznummern": ["R0"]}',
+            '{"referenznummern": ["R2"]}',
+            '{"referenznummern": []}',
+        ]
+    )
+    ergebnis = stufe1_filtern(daten, "prompt", mistral, "modell")
+    assert len(mistral.aufrufe) == 3
+    assert [d["referenznummer"] for d in ergebnis] == ["R0", "R2"]
+
+
+def test_stufe2_ausgabe_mit_titel_und_eine_begruendung(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    detail_mit_titel = {"referenznummer": "R1", "titel": "Entwickler", "ort": "X"}
+    mistral = FakeMistral(
+        [
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "angenommen", "begruendung": "Passt zum Profil."}]}'
+        ]
+    )
+    stufe2_bewerten([detail_mit_titel], "prompt", mistral, "modell")
+    out = capsys.readouterr().out
+    assert "[Stufe 2] R1 (Entwickler): angenommen - Passt zum Profil." in out
+    assert out.count("Passt zum Profil.") == 1  # Begründung genau einmal
+
+
+def test_ablauf_ohne_doppelte_begruendung(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mistral = FakeMistral(
+        [
+            '{"referenznummern": ["R1"]}',
+            '{"bewertungen": [{"referenznummer": "R1", "entscheidung": "abgelehnt", "begruendung": "Fachfremd."}]}',
+        ]
+    )
+    schreibe_prompts(tmp_path)
+    fuehre_aus(konfig(), FakeArbeitsamt([[ANGEBOT]], {"R1": DETAIL}), mistral, tmp_path)
+    out = capsys.readouterr().out
+    assert out.count("Fachfremd.") == 1
+    assert "[Bewertung]" not in out
 
 
 def test_stufe2_umlaut_schluessel() -> None:

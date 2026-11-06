@@ -13,7 +13,6 @@ from a_shell_agent.fehler import AgentFehler
 from a_shell_agent.konfiguration import Konfiguration, baue_konfiguration
 from a_shell_agent.llm import MistralKlient
 from a_shell_agent.pipeline import (
-    Bewertung,
     stufe1_filtern,
     stufe2_bewerten,
     stufe3_bericht,
@@ -105,7 +104,6 @@ def fuehre_aus(
     )
     bewertungen = stufe2_bewerten(details, prompt2, mistral, konfig.modell_stufe2)
     angenommen = [b for b in bewertungen if b.angenommen]
-    _drucke_bewertungen(bewertungen)
     if not angenommen:
         print("Keine Jobs gefunden")
         _aufraeumen(arbeitsverzeichnis, konfig.debug)
@@ -148,11 +146,6 @@ def fuehre_aus(
     _aufraeumen(arbeitsverzeichnis, konfig.debug)
     print("Fertig.")
     return 0
-
-
-def _drucke_bewertungen(bewertungen: list[Bewertung]) -> None:
-    for b in bewertungen:
-        print(f"[Bewertung] {b.referenznummer}: {b}", flush=True)
 
 
 def _aufraeumen(arbeitsverzeichnis: Path, debug: bool) -> None:

@@ -15,7 +15,7 @@ Das Wheel `a_shell_jobagent-…-py3-none-any.whl` (Ordner `dist/`) z. B. per
 AirDrop oder aus iCloud in a-Shell holen und installieren:
 
 ```
-pip install a_shell_jobagent-0.1.0-py3-none-any.whl
+pip install a_shell_jobagent-0.1.1-py3-none-any.whl
 ```
 
 ### Desktop
@@ -63,16 +63,19 @@ python -m a_shell_agent 57080 7 25
    ca. 6 s Pause zwischen Seiten, Backoff bei 429/5xx).
 3. `stellen.json` mit allen Überschriften unverändert ins Arbeitsverzeichnis
    schreiben. Keine Angebote: Meldung `Keine Daten vorhanden`, Ende (Exit 0).
-4. LLM-Stufe 1 (Aussortieren): Prompt-Datei `stufe1_prompts.txt`, alle
-   Datensätze roh an das Modell, zurück kommen die Referenznummern der zu
-   behaltenden Angebote. Nichts übrig: `Keine Daten vorhanden`, Ende (Exit 0).
+4. LLM-Stufe 1 (Aussortieren): Prompt-Datei `stufe1_prompts.txt`, die
+   Datensätze roh in Batches (max. ~150 KB je Anfrage) an das Modell, zurück
+   kommen die Referenznummern der zu behaltenden Angebote. Nichts übrig:
+   `Keine Daten vorhanden`, Ende (Exit 0).
 5. Details der Kandidaten holen und als `details.json` schreiben.
 6. LLM-Stufe 2 (Positivauswahl): Prompt-Datei `stufe2_prompts.txt`, die
    Detail-Datensätze vollständig und roh in wenigen Batches (max. ~150 KB
    je Anfrage, damit der Kontext von Mistral Medium sicher reicht) an das
    Modell; Antwort je Job: Referenznummer, Entscheidung
    (angenommen/abgelehnt), Begründung (Schlüssel tolerant gegenüber
-   Umlaut-Varianten wie `begründung`). Kein Job angenommen: Meldung
+   Umlaut-Varianten wie `begründung`). Je Job erscheint genau eine
+   `[Stufe 2]`-Zeile mit Referenznummer, Titel (falls im Datensatz
+   vorhanden) und Begründung. Kein Job angenommen: Meldung
    `Keine Jobs gefunden`, Ende (Exit 0).
 7. LLM-Stufe 3 (Bericht): Prompt-Datei `bericht_prompts.txt`, Detail-Datensätze
    der angenommenen Jobs plus Suchparameter an das Modell; die Antwort wird
@@ -102,6 +105,19 @@ mitgelieferte Vorlage hinein und bricht ab:
 
 Eine existierende Datei wird nie überschrieben. Eine leere Datei oder eine
 mit unverändertem Platzhalter führt zum Abbruch mit Fehlermeldung.
+
+### Beispiel-Promptdateien
+
+Im Ordner `beispiel-prompts/` liegen die drei generischen Vorlagen als
+Dateien – als Ausgangspunkt, ohne persönliche Kriterien. Sie enthalten
+denselben Aufbau, den das Programm beim ersten Lauf automatisch erzeugt:
+
+```
+cp beispiel-prompts/stufe1_prompts.txt beispiel-prompts/stufe2_prompts.txt beispiel-prompts/bericht_prompts.txt ~/Documents/Jobagent/
+```
+
+Danach nur noch die Platzhalter in Stufe 1 und 2 personalisieren und die
+Berichtsvorlage prüfen.
 
 ## API-Schlüssel (.env)
 
