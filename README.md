@@ -31,7 +31,7 @@ Das Wheel `a_shell_jobagent-…-py3-none-any.whl` (Ordner `dist/`) z. B. per
 AirDrop oder aus iCloud in a-Shell holen und installieren:
 
 ```
-pip install a_shell_jobagent-0.1.3-py3-none-any.whl
+pip install a_shell_jobagent-0.2.0-py3-none-any.whl
 ```
 
 ### Desktop
@@ -75,12 +75,13 @@ python -m a_shell_agent 57080 7 25
 ## Ablauf
 
 1. Parameter prüfen (ungültige Werte: Abbruch mit Fehlermeldung).
-2. Alle drei Prompt-Dateien vorab prüfen: Fehlende werden aus den Vorlagen
-   angelegt (alle in einem Schritt), danach Abbruch mit der Bitte, die
-   persönlichen Platzhalter auszufüllen bzw. die Vorlagen zu prüfen. Leere
-   Dateien oder unveränderte Platzhalter werden ohne Überschreiben
-   beanstandet. Die Prüfung läuft bewusst vor allen Abrufen, damit ein
-   Abbruch keine Rechenleistung verschwendet.
+2. Die Prompt-Inhaltsdateien vorab prüfen: Fehlende Pflichtdateien (Stufe 1
+   und 2) werden aus den Vorlagen angelegt (in einem Schritt), danach Abbruch
+   mit der Bitte, die persönlichen Platzhalter auszufüllen. Leere Dateien
+   oder unveränderte Platzhalter werden ohne Überschreiben beanstandet. Die
+   optionale Berichtsdatei braucht nicht zu existieren. Die Prüfung läuft
+   bewusst vor allen Abrufen, damit ein Abbruch keine Rechenleistung
+   verschwendet. Die Struktur-Prompts kommen aus dem Paket.
 3. Alle Angebote des Zeitraums von der Arbeitsagentur-API holen (Pagination,
    ca. 6 s Pause zwischen Seiten, Backoff bei 429/5xx).
 4. `stellen.json` mit allen Überschriften unverändert ins Arbeitsverzeichnis
@@ -112,34 +113,47 @@ keine Feldauswahl und nimmt nur an, dass jeder Datensatz eine
 `referenznummer` trägt (ausschließlich zur Verwaltung). Welche Felder
 inhaltlich relevant sind, entscheidet allein die jeweilige Prompt-Datei.
 
-## Die drei Prompt-Dateien
+## Die Prompt-Dateien: Inhalt und Form sind getrennt
 
-Die Prompt-Dateien liegen im **Arbeitsverzeichnis** (dem Verzeichnis des
-Aufrufs), nicht im Paket. Fehlt eine Datei, schreibt das Programm die
-mitgelieferte Vorlage hinein und bricht ab:
+Die **Struktur** (Aufgabe, Antwortform, Anführungszeichen-Regeln) liegt im
+Paket (`a_shell_agent/struktur.py`) – sie kann im Arbeitsverzeichnis nicht
+versehentlich beschädigt werden. Im **Arbeitsverzeichnis** stehen nur die
+**persönlichen Inhalte**:
 
-- `stufe1_prompts.txt` – Jobprofile am Platzhalter `[[HIER: …]]` ausfüllen.
-- `stufe2_prompts.txt` – Anforderungen, Stärken, Schwächen, Wünsche und
-  Abneigungen am Platzhalter `[[HIER: …]]` ausfüllen.
-- `bericht_prompts.txt` – enthält keine persönlichen Kriterien und ist ab
-  Erzeugung einsatzbereit; der Abbruch nach dem Erzeugen dient nur der
-  einmaligen Prüfung, danach darf die Vorlage frei umbaut werden.
+- `stufe1_prompts.txt` (Pflicht) – nur deine Jobprofile. Fehlt die Datei,
+  schreibt das Programm eine kleine Vorlage mit Platzhalter
+  `[[HIER: …]]` hinein und bricht ab.
+- `stufe2_prompts.txt` (Pflicht) – nur deine Anforderungen, Stärken,
+  Schwächen, Wünsche und Abneigungen. Gleiche Behandlung wie Stufe 1.
+- `bericht_prompts.txt` (optional) – persönliche Wünsche an den Bericht
+  (z. B. Ton, Länge). Fehlt die Datei, läuft der Bericht mit der
+  Standardstruktur; es gibt keinen Abbruch.
 
-Eine existierende Datei wird nie überschrieben. Eine leere Datei oder eine
-mit unverändertem Platzhalter führt zum Abbruch mit Fehlermeldung.
+Eine existierende Datei wird nie überschrieben. Bei den Pflichtdateien
+führen eine leere Datei oder ein unveränderter Platzhalter zum Abbruch mit
+Fehlermeldung. Das Programm setzt die Struktur automatisch vor deinen
+Inhalt zusammen – du schreibst also nur noch *was* gefiltert werden soll,
+nicht *wie* die Antwort auszusehen hat.
 
 ### Beispiel-Promptdateien
 
-Im Ordner `beispiel-prompts/` liegen die drei generischen Vorlagen als
-Dateien – als Ausgangspunkt, ohne persönliche Kriterien. Sie enthalten
-denselben Aufbau, den das Programm beim ersten Lauf automatisch erzeugt:
+Im Ordner `beispiel-prompts/` liegen die drei Inhalts-Vorlagen als Dateien –
+denselben Inhalt, den das Programm beim ersten Lauf automatisch erzeugt:
 
 ```
-cp beispiel-prompts/stufe1_prompts.txt beispiel-prompts/stufe2_prompts.txt beispiel-prompts/bericht_prompts.txt ~/Documents/Jobagent/
+cp beispiel-prompts/stufe1_prompts.txt beispiel-prompts/stufe2_prompts.txt ~/Documents/Jobagent/
 ```
 
-Danach nur noch die Platzhalter in Stufe 1 und 2 personalisieren und die
-Berichtsvorlage prüfen.
+Danach nur noch die Platzhalter in Stufe 1 und 2 personalisieren. Die
+optionale `bericht_prompts.txt` kannst du bei Bedarf selbst anlegen.
+
+### Umstieg von älteren Versionen
+
+Vor Version 0.2.0 enthielten die Prompt-Dateien Struktur und Inhalt
+gemischt. Beim Umstieg: deine persönlichen Kriterien aus den alten Dateien
+herauskopieren und als neuen Inhalt in die frisch erzeugten Dateien
+einfüllen – die Strukturblöcke (Aufgabe, Antwortform) gehören nicht mehr
+in die Dateien.
 
 ## API-Schlüssel (.env)
 
@@ -171,8 +185,8 @@ Die `.env` sollte nicht in Git landen (siehe `.gitignore`).
 - `Antwort der LLM-Stufe ist kein gültiges JSON` – Stufe 1 oder 2 lieferte
   kein JSON-Objekt.
 - `Mistral hat für den Bericht eine leere Antwort geliefert.` – Stufe 3.
-- `Prompt-Datei … fehlte: Vorlage wurde erstellt …` – Prompt-Datei fehlte,
-  Vorlage wurde erzeugt; persönlichen Teil ausfüllen bzw. Vorlage prüfen.
+- `Prompt-Datei … fehlte: Vorlage wurde erstellt …` – Inhaltsdatei fehlte,
+  Vorlage wurde erzeugt; persönlichen Teil ausfüllen.
 - `Prompt-Datei … ist leer` bzw. `… enthält noch den unveränderten Platzhalter`
   – Prompt-Datei ohne Überschreiben beanstandet.
 - `Kein einziger Detailabruf erfolgreich …` – alle Detailabrufe schlugen fehl.
