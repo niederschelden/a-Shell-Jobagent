@@ -32,7 +32,7 @@ from a_shell_agent.prompts import (
     DATEINAME_STUFE2,
     PLATZHALTER_MARKE,
     lade_alle_prompts,
-    lade_prompt,
+    lade_inhalt,
 )
 from a_shell_agent.umgebung import lade_env
 
@@ -101,11 +101,9 @@ DETAIL = {"referenznummer": "R1", "titel": "Entwickler", "ort": "Siegen"}
 def schreibe_prompts(verzeichnis: Path) -> None:
     for name in (DATEINAME_STUFE1, DATEINAME_STUFE2):
         (verzeichnis / name).write_text(
-            "Persönliche Kriterien: IT-Jobs.\n", encoding="utf-8"
+            "IT-Anwendungsentwicklung, Linux, IT im Gesundheitswesen.\n",
+            encoding="utf-8",
         )
-    (verzeichnis / DATEINAME_BERICHT).write_text(
-        "Erstelle den Bericht.\n", encoding="utf-8"
-    )
 
 
 # ---------------------------------------------------------------- Parameter
@@ -686,10 +684,10 @@ def test_debug_bezeichnungen_der_stufen(
 # ------------------------------------------------- Vorab-Prüfung Prompts
 
 
-def test_vorpruefung_legt_alle_drei_an(tmp_path: Path) -> None:
+def test_vorpruefung_legt_pflichtdateien_an(tmp_path: Path) -> None:
     with pytest.raises(
         AgentFehler,
-        match=r"erstellt: .*stufe1_prompts\.txt, stufe2_prompts\.txt, bericht_prompts\.txt",
+        match=r"erstellt: .*stufe1_prompts\.txt, stufe2_prompts\.txt",
     ):
         lade_alle_prompts(tmp_path)
     from a_shell_agent import prompts
@@ -697,41 +695,44 @@ def test_vorpruefung_legt_alle_drei_an(tmp_path: Path) -> None:
     for name, vorlage in (
         (prompts.DATEINAME_STUFE1, prompts.VORLAGE_STUFE1),
         (prompts.DATEINAME_STUFE2, prompts.VORLAGE_STUFE2),
-        (prompts.DATEINAME_BERICHT, prompts.VORLAGE_BERICHT),
     ):
         assert (tmp_path / name).read_text(encoding="utf-8") == vorlage
+    # Berichtsdatei ist optional und wird nicht angelegt
+    assert not (tmp_path / prompts.DATEINAME_BERICHT).exists()
 
 
-def test_vorpruefung_legt_fehlende_alle_ohne_ueberschreiben(
-    tmp_path: Path,
-) -> None:
+def test_vorpruefung_legt_fehlende_ohne_ueberschreiben(tmp_path: Path) -> None:
     schreibe_prompts(tmp_path)
     (tmp_path / DATEINAME_STUFE1).unlink()
-    (tmp_path / DATEINAME_BERICHT).unlink()
-    with pytest.raises(
-        AgentFehler, match=r"erstellt: .*stufe1_prompts\.txt, bericht_prompts\.txt"
-    ):
+    with pytest.raises(AgentFehler, match=r"erstellt: .*stufe1_prompts\.txt"):
         lade_alle_prompts(tmp_path)
     # Stufe 2 bleibt unberührt
-    assert (tmp_path / DATEINAME_STUFE2).read_text(
-        encoding="utf-8"
-    ) == "Persönliche Kriterien: IT-Jobs.\n"
+    assert (tmp_path / DATEINAME_STUFE2).read_text(encoding="utf-8") == (
+        "IT-Anwendungsentwicklung, Linux, IT im Gesundheitswesen.\n"
+    )
 
 
 def test_vorpruefung_sammelt_probleme(tmp_path: Path) -> None:
     schreibe_prompts(tmp_path)
-    (tmp_path / DATEINAME_STUFE2).write_text("", encoding="utf-8")
-    (tmp_path / DATEINAME_BERICHT).write_text("  ", encoding="utf-8")
-    with pytest.raises(AgentFehler, match=r"leer.*leer"):
+    (tmp_path / DATEINAME_STUFE1).write_text("", encoding="utf-8")
+    from a_shell_agent import prompts
+
+    (tmp_path / DATEINAME_STUFE2).write_text(prompts.VORLAGE_STUFE2, encoding="utf-8")
+    with pytest.raises(AgentFehler, match=r"leer.*Platzhalter"):
         lade_alle_prompts(tmp_path)
-    assert (tmp_path / DATEINAME_STUFE2).read_text(encoding="utf-8") == ""
+    assert (tmp_path / DATEINAME_STUFE1).read_text(encoding="utf-8") == ""
 
 
-def test_vorpruefung_ok_liefert_inhalte(tmp_path: Path) -> None:
+def test_vorpruefung_ok_liefert_kombinierte_prompts(tmp_path: Path) -> None:
     schreibe_prompts(tmp_path)
-    p1, _p2, p3 = lade_alle_prompts(tmp_path)
-    assert p1 == "Persönliche Kriterien: IT-Jobs.\n"
-    assert p3 == "Erstelle den Bericht.\n"
+    p1, p2, p3 = lade_alle_prompts(tmp_path)
+    from a_shell_agent import struktur
+
+    assert p1.startswith(struktur.STRUKTUR_STUFE1)
+    assert p1.endswith("IT-Anwendungsentwicklung, Linux, IT im Gesundheitswesen.\n")
+    assert p2.startswith(struktur.STRUKTUR_STUFE2)
+    # Ohne Berichtsdatei: reine Struktur
+    assert p3 == struktur.STRUKTUR_BERICHT
 
 
 def test_vorpruefung_vor_api_abruf(tmp_path: Path) -> None:
@@ -751,7 +752,7 @@ def test_vorpruefung_vor_api_abruf(tmp_path: Path) -> None:
 def test_prompt_fehlend_wird_erzeugt_und_abbruch(tmp_path: Path) -> None:
     pfad = tmp_path / DATEINAME_STUFE1
     with pytest.raises(AgentFehler, match="ausfüllen"):
-        lade_prompt(pfad, "VORLAGE\n[[HIER: x]]", platzhalter_pflicht=True)
+        lade_inhalt(pfad, "VORLAGE\n[[HIER: x]]", platzhalter_pflicht=True)
     assert pfad.read_text(encoding="utf-8") == "VORLAGE\n[[HIER: x]]"
 
 
@@ -759,7 +760,7 @@ def test_prompt_leer_abbruch_ohne_ueberschreiben(tmp_path: Path) -> None:
     pfad = tmp_path / DATEINAME_STUFE1
     pfad.write_text("", encoding="utf-8")
     with pytest.raises(AgentFehler, match="leer"):
-        lade_prompt(pfad, "VORLAGE", platzhalter_pflicht=True)
+        lade_inhalt(pfad, "VORLAGE", platzhalter_pflicht=True)
     assert pfad.read_text(encoding="utf-8") == ""
 
 
@@ -769,7 +770,7 @@ def test_prompt_platzhalter_unveraendert_abbruch(tmp_path: Path) -> None:
         "Struktur...\n[[HIER: Deine Jobprofile eintragen]]", encoding="utf-8"
     )
     with pytest.raises(AgentFehler, match="Platzhalter"):
-        lade_prompt(pfad, "VORLAGE", platzhalter_pflicht=True)
+        lade_inhalt(pfad, "VORLAGE", platzhalter_pflicht=True)
     assert pfad.read_text(encoding="utf-8").startswith("Struktur")
 
 
@@ -777,38 +778,77 @@ def test_prompt_personalisiert_ok(tmp_path: Path) -> None:
     pfad = tmp_path / DATEINAME_STUFE1
     pfad.write_text("Meine Kriterien: alles mit Linux.", encoding="utf-8")
     assert (
-        lade_prompt(pfad, "VORLAGE", platzhalter_pflicht=True)
+        lade_inhalt(pfad, "VORLAGE", platzhalter_pflicht=True)
         == "Meine Kriterien: alles mit Linux."
     )
 
 
-def test_bericht_prompt_fehlend_wird_erzeugt(tmp_path: Path) -> None:
+def test_bericht_inhalt_fehlend_ist_leer(tmp_path: Path) -> None:
     pfad = tmp_path / DATEINAME_BERICHT
-    with pytest.raises(AgentFehler, match="prüfen"):
-        lade_prompt(pfad, "BERICHTSVORLAGE", platzhalter_pflicht=False)
-    assert pfad.read_text(encoding="utf-8") == "BERICHTSVORLAGE"
+    assert lade_inhalt(pfad, "V", platzhalter_pflicht=False) == ""
+    assert not pfad.exists()  # optionale Datei wird nicht angelegt
 
 
-def test_bericht_prompt_leer_abbruch(tmp_path: Path) -> None:
+def test_bericht_inhalt_leer_ist_leer(tmp_path: Path) -> None:
     pfad = tmp_path / DATEINAME_BERICHT
     pfad.write_text("  ", encoding="utf-8")
-    with pytest.raises(AgentFehler, match="leer"):
-        lade_prompt(pfad, "VORLAGE", platzhalter_pflicht=False)
-    assert pfad.read_text(encoding="utf-8") == "  "
+    assert lade_inhalt(pfad, "V", platzhalter_pflicht=False) == ""
 
 
-def test_bericht_prompt_ohne_platzhalter_ok(tmp_path: Path) -> None:
+def test_bericht_inhalt_platzhalter_ist_leer(tmp_path: Path) -> None:
     pfad = tmp_path / DATEINAME_BERICHT
-    pfad.write_text("Schreibe den Bericht.", encoding="utf-8")
-    assert lade_prompt(pfad, "V", platzhalter_pflicht=False) == "Schreibe den Bericht."
+    pfad.write_text("[[HIER: Wünsche]]", encoding="utf-8")
+    assert lade_inhalt(pfad, "V", platzhalter_pflicht=False) == ""
+
+
+def test_bericht_inhalt_vorhanden(tmp_path: Path) -> None:
+    pfad = tmp_path / DATEINAME_BERICHT
+    pfad.write_text("Schreibe locker und kurz.", encoding="utf-8")
+    assert (
+        lade_inhalt(pfad, "V", platzhalter_pflicht=False) == "Schreibe locker und kurz."
+    )
+
+
+def test_bericht_wird_mit_inhalt_kombiniert(tmp_path: Path) -> None:
+    schreibe_prompts(tmp_path)
+    (tmp_path / DATEINAME_BERICHT).write_text(
+        "Schreibe locker und kurz.", encoding="utf-8"
+    )
+    _p1, _p2, p3 = lade_alle_prompts(tmp_path)
+    from a_shell_agent import struktur
+
+    assert p3.startswith(struktur.STRUKTUR_BERICHT)
+    assert p3.endswith("Schreibe locker und kurz.")
 
 
 def test_vorlagen_enthalten_platzhaltermarke() -> None:
     from a_shell_agent import prompts
 
-    assert PLATZHALTER_MARKE in prompts.VORLAGE_STUFE1
-    assert PLATZHALTER_MARKE in prompts.VORLAGE_STUFE2
-    assert PLATZHALTER_MARKE not in prompts.VORLAGE_BERICHT
+    for vorlage in (
+        prompts.VORLAGE_STUFE1,
+        prompts.VORLAGE_STUFE2,
+        prompts.VORLAGE_BERICHT,
+    ):
+        assert PLATZHALTER_MARKE in vorlage
+
+
+def test_struktur_trennt_form_und_inhalt() -> None:
+    """Die Form (Aufgabe, Antwortform, Anführungszeichen-Regel) liegt in
+    struktur.py im Paket; die Inhalts-Vorlagen enthalten keine Struktur."""
+    from a_shell_agent import prompts, struktur
+
+    for text in (struktur.STRUKTUR_STUFE1, struktur.STRUKTUR_STUFE2):
+        assert 'ASCII-Anführungszeichen " als JSON-Begrenzer' in text
+        assert "niemals Anführungszeichen" in text
+        assert "referenznummern" in struktur.STRUKTUR_STUFE1
+        assert "bewertungen" in struktur.STRUKTUR_STUFE2
+    for vorlage in (
+        prompts.VORLAGE_STUFE1,
+        prompts.VORLAGE_STUFE2,
+        prompts.VORLAGE_BERICHT,
+    ):
+        assert "JSON" not in vorlage
+        assert "Antworte" not in vorlage
 
 
 # ------------------------------------------------------------------ .env
