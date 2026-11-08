@@ -1,0 +1,7 @@
+#!/bin/sh
+# Startet den endlos laufenden Dev-Container und oeffnet eine Shell darin.
+set -e
+cd "$(dirname "$0")/.."
+
+docker compose up -d jobagent-shell
+docker compose exec jobagent-shell sh

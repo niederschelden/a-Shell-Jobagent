@@ -1,9 +1,19 @@
+x-basis: &basis
+  build: .
+  image: jobagent:local
+  env_file:
+    - .env
+  working_dir: /arbeit
+  volumes:
+    - ./arbeit:/arbeit
+
 services:
   jobagent:
-    build: .
-    image: jobagent:local
-    env_file:
-      - .env
-    working_dir: /arbeit
-    volumes:
-      - ./arbeit:/arbeit
+    <<: *basis
+
+  # Bleibt endlos laufen, zum Einsteigen und Testen:
+  #   bin/shell   (oder: docker compose exec jobagent-shell bash)
+  jobagent-shell:
+    <<: *basis
+    entrypoint: ["sleep", "infinity"]
+    init: true

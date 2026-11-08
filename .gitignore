@@ -7,4 +7,3 @@ dist/
 .ruff_cache/
 uv.lock
 arbeit/
-release/*.whl
