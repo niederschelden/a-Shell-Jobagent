@@ -17,3 +17,12 @@ services:
     <<: *basis
     entrypoint: ["sleep", "infinity"]
     init: true
+
+  # Einmal-Container: Tests + Wheel-Bau, Wheel landet in ./arbeit/
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
+    image: jobagent-builder:local
+    volumes:
+      - ./arbeit:/arbeit
