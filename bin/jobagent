@@ -1,0 +1,6 @@
+#!/bin/sh
+# Jobagent starten, z. B.: bin/jobagent 57080 7 25 [--debug]
+set -e
+cd "$(dirname "$0")/.."
+
+docker compose run --rm jobagent "$@"

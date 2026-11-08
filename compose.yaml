@@ -1,0 +1,9 @@
+services:
+  jobagent:
+    build: .
+    image: jobagent:local
+    env_file:
+      - .env
+    working_dir: /arbeit
+    volumes:
+      - ./arbeit:/arbeit
