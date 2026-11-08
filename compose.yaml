@@ -1,0 +1,28 @@
+x-basis: &basis
+  build: .
+  image: jobagent:local
+  env_file:
+    - .env
+  working_dir: /arbeit
+  volumes:
+    - ./arbeit:/arbeit
+
+services:
+  jobagent:
+    <<: *basis
+
+  # Bleibt endlos laufen, zum Einsteigen und Testen:
+  #   bin/shell   (oder: docker compose exec jobagent-shell bash)
+  jobagent-shell:
+    <<: *basis
+    entrypoint: ["sleep", "infinity"]
+    init: true
+
+  # Einmal-Container: Tests + Wheel-Bau, Wheel landet in ./arbeit/
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
+    image: jobagent-builder:local
+    volumes:
+      - ./arbeit:/arbeit

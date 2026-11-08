@@ -1,0 +1,7 @@
+#!/bin/sh
+# Tests + Wheel-Bau im Build-Container; Wheel landet in ./arbeit/.
+set -e
+cd "$(dirname "$0")/.."
+
+docker compose build builder
+docker compose run --rm builder

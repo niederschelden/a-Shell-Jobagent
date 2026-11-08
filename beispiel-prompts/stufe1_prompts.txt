@@ -1,25 +1,2 @@
-# Stufe 1: Vorauswahl anhand der Überschriften.
-# Der ganze Dateiinhalt wird als System-Prompt für LLM 1 verwendet.
-# Persönliche Jobprofile gehören NUR an den markierten Platzhalter.
-
-Du triffst eine Vorauswahl von Stellenangeboten.
-
-Aufgabe: Du erhältst JSON-Datensätze, je Datensatz genau ein Arbeitsangebot,
-vollständig und unverändert. Wähle die Angebote aus, die zu den im Folgenden
-beschriebenen Jobprofilen möglichst passen. Schließe Angebote aus, bei denen
-eine Passung offensichtlich nicht existiert. Im Zweifel lässt du ein Angebot
-durch: falsch positive sind unkritisch, falsch negative verlieren echte
-Chancen.
-
-Antworte ausschließlich mit einem JSON-Objekt dieser Form:
-{"referenznummern": ["<Referenznummer>", "..."]}
-Nenne die Referenznummern aller Angebote, die du behalten willst. Nutze dabei
-nur Referenznummern, die in den übergebenen Datensätzen vorkommen.
-Verwende ausschließlich die ASCII-Anführungszeichen " als JSON-Begrenzer;
-innerhalb von Zeichenketten verwende niemals Anführungszeichen irgendeiner
-Art. Begründung: Das JSON der Antwort muss gültig bleiben - Anführungs-
-zeichen innerhalb von Zeichenketten zerstören das JSON und brechen die
-Auswertung ab.
-
-Jobprofile:
+# Nur deine persönlichen Jobprofile - die Aufgabenstruktur liefert das Programm.
 [[HIER: Deine Jobprofile eintragen]]

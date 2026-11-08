@@ -1,0 +1,7 @@
+#!/bin/sh
+# Nur die Tests im Build-Container ausfuehren.
+set -e
+cd "$(dirname "$0")/.."
+
+docker compose build builder
+docker compose run --rm builder python -m pytest -q
