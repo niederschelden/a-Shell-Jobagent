@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from a_shell_agent.fehler import AgentFehler
 
-ZEITRAUM_WERTE: tuple[int, ...] = (1, 3, 7, 14, 30)
+ZEITRAUM_WERTE: tuple[int, ...] = (0, 1, 7, 14, 28)
 DEFAULT_MODELL_STUFE1 = "mistral-medium-latest"
 DEFAULT_MODELL_STUFE2 = "mistral-medium-latest"
 DEFAULT_MODELL_BERICHT = "mistral-medium-latest"
